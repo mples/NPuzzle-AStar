@@ -15,7 +15,7 @@ public class Application {
         Node n2 = new Node(3);
         System.out.println(n2.toString());
 
-        AStar as = new AStar("/home/mateusz/Downloads/N-Puzzle-Solver/src/puzzle.txt");
+        AStar as = new AStar("/home/mateusz/Downloads/N-Puzzle-Solver/src/puzzle.txt", 10000000L);
         as.solve();
     }
 
