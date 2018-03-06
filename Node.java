@@ -1,3 +1,5 @@
+package astar;
+
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
@@ -18,8 +20,12 @@ public class Node {
     Node parent;
     Direction direction;
 
-    Node(String input) throws IOException{
+    long zobristKey;
+    boolean zobristKeyInitialized = false;
 
+    static PatternDatabase patterndb;
+
+    Node(String input) throws IOException{
 
         BufferedReader in = new BufferedReader(new FileReader(input));
         int j = 0;
@@ -42,12 +48,18 @@ public class Node {
         }
         in.close();
 
+        patterndb = new PatternDatabase(size);
+        // TODO assumption: this constructor will be called as the first one in the entire program
+        // TODO add Zobrist init in every constructor??
+        //zobristGenerator.initZobristGenerator(size*size, false);
+        Zobrist.instance().initZobristGenerator(size*size, true);
     }
     Node(int s){
         size =s ;
         pBoard = new byte[size*size];
         for(int i =0; i < size*size ; ++i){
-            pBoard[i] = Byte.parseByte(Integer.toString(i));
+            //pBoard[i] = Byte.parseByte(Integer.toString(i));    // TODO pBoard[i] = (byte)i;
+            pBoard[i] = (byte)i;
         }
         blankX = 0;
         blankY = 0;
@@ -56,22 +68,51 @@ public class Node {
     Node(Node n){
         pBoard = Arrays.copyOf(n.pBoard,n.size*n.size);
         g = n.g +1;
-        //TODO H F
+        
         size = n.size;
         blankX = n.blankX;
         blankY = n.blankY;
 
         parent = n;
     }
+    
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		if (obj == null)
+			return false;
+		if (getClass() != obj.getClass())
+			return false;
+		Node other = (Node) obj;
+		if (!Arrays.equals(pBoard, other.pBoard))
+			return false;
+		return true;
+	}
 
     @Override
+    public int hashCode() {
+        if (!zobristKeyInitialized) {
+            if (parent == null) { // root node
+                zobristKey = Zobrist.instance().initZobristKeyForState(this);
+            } else {
+                zobristKey = Zobrist.instance().tileMoveFromState(parent.zobristKey, getMoveDoneFromParentState());
+            }
+            zobristKeyInitialized = true;
+        }
+
+        return Long.hashCode(zobristKey);
+        //return (int)zobristKey;
+    }
+
+	@Override
     public String toString() {
         return "Node{" +
                 "pBoard=" + Arrays.toString(pBoard) +
                 '}';
     }
-
-    ArrayList<Node> genChildren(){
+	
+	ArrayList<Node> genChildren(){
         ArrayList<Node> childrenList = new ArrayList<Node>();
         if(blankX < size-1){
             Node rChild = new Node(this);
@@ -129,14 +170,30 @@ public class Node {
     private void downMove(){
         byte temp = this.pBoard[(blankY+1)*size+ blankX];
         this.pBoard[(blankY+1)*size+ blankX] = 0;
+        this.pBoard[(blankY+1)*size+ blankX] = 0;
         this.pBoard[blankY*size+ blankX] = temp;
         blankY = blankY +1;
 
     }
     void updateF(){
-        calculateManhattanHeur();
+        //calculateManhattanHeur();
+        h = patterndb.calculateHeu(pBoard);
+        if(h == 0){
+            calculateManhattanHeur();
+        }
         f = g + h;
     }
+
+    public TileMove getMoveDoneFromParentState() {
+        // movedTile is the tile that was swapped in the game board with the blank (0) tile
+        // when generating this game state (node)
+        byte movedTile = parent.pBoard[blankY*size + blankX];
+        int movedFromPos = blankY*size + blankX;
+        int movedToPos = parent.blankY*size + parent.blankX;
+
+        return new TileMove(movedTile, movedFromPos, movedToPos);
+    }
+
     private void calculateManhattanHeur(){
         int totalDistance = 0;
         for(int j =0 ; j < size; ++j){
